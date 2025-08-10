@@ -1,0 +1,88 @@
+x-service-templates:
+ api: &backend
+    build:
+     context: ../src/api
+     dockerfile: Dockerfile
+    networks:
+     - backend-network
+     - payment-processor
+    expose:
+     - 8080
+    # environment:
+    #  - PAYMENT_PROCESSOR_DEFAULT_URL=
+    #  - PAYMENT_PROCESSOR_FALLBACK_URL=
+    deploy:
+      resources:
+        limits:
+          cpus: "0.60"
+          memory: "125MB"
+
+services:
+
+  api-1:
+    <<: *backend
+    container_name: api-container-1
+    
+  api-2:
+    <<: *backend
+    container_name: api-container-2
+
+  # Serviço nginx terá 0.15 CPUS e 50MB de Memoria 
+
+  nginx:
+    image: nginx:latest
+    container_name: load-balancer-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-1
+      - api-2
+    ports:
+      - "9999:9999"
+    networks:
+      - backend-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: "25mb"
+
+  database:
+   container_name: api-postgres-db
+   image: postgres
+   restart: always
+   environment:
+    - POSTGRES_PASSWORD=postgres
+    - POSTGRES_DB=rinha
+   ports:
+    - 5432:5432
+   volumes:
+    - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+   networks:
+    - backend-network
+    - payment-processor
+   deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: "75MB"
+  
+  adminer:
+   container_name: adminer-container
+   image: adminer
+   restart: always
+   ports:
+    - 8082:8080 
+   networks:
+    - backend-network
+   
+# volumes:
+#   pgdata:  
+
+networks:
+ backend-network:
+   driver: bridge
+
+ payment-processor:
+   external: true
+  
